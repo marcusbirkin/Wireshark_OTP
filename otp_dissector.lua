@@ -17,6 +17,21 @@ local SIZE_GROUP = 2
 local SIZE_POINT = 4
 local SIZE_TIMESTAMP = 8
 local SIZE_PRIORITY = 1
+local SIZE_MANUFACTURERID = 2
+local SIZE_MODULENUMBER = 2
+
+local OTP_MANUFACTURERIDS = {
+	[0x0000] = "ESTA"
+}
+
+local OTP_MODULENUMBERS = {
+	[0x0001] = "Position",
+	[0x0002] = "Position Velocity/Acceleration",
+	[0x0003] = "Rotation",
+	[0x0004] = "Rotation Velocity/Acceleration",
+	[0x0005] = "Scale",
+	[0x0006] = "Reference Frame"
+}
 
 local SIZE_OTPLAYER = OTP_IDENT:len() + SIZE_VECTOR + SIZE_LENGTH + SIZE_FOOTER_OPTIONS + SIZE_FOOTER_LENGTH + SIZE_CID + SIZE_FOLIO + SIZE_PAGE + SIZE_PAGE + SIZE_OPTIONS + SIZE_RESERVED + SIZE_NAME
 OTPLayer_Ident = ProtoField.string("otp.ident", "OTP Packet Identifier", base.ASCII, "Identifies this message as OTP")
@@ -47,26 +62,14 @@ OTPAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.length", "Le
 OTPAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.reserved", "Reserved", base.HEX) -- "Reserved"
 
 local SIZE_OTPADVERTISMENTMODULE = SIZE_VECTOR + SIZE_LENGTH + SIZE_RESERVED
-local SIZE_MANUFACTURERID = 2
-local SIZE_MODULENUMBER = 2
 local OTPModuleAdvertisementLayer_Vectors = {
 	[0x0001] = "VECTOR_OTP_ADVERTISEMENT_MODULE_LIST"
 }
 OTPModuleAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.module.vector", "Vector", base.HEX, OTPAdvertisementLayer_Vectors, 0, "Identifies Module Advertisement data as module list")
 OTPModuleAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.module.length", "Length", base.DEC) -- "Length of PDU"
 OTPModuleAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.module.reserved", "Reserved", base.HEX) -- "Reserved"
-local OTPModuleAdvertisementLayer_ManufacturerIDs = {}
-OTPModuleAdvertisementLayer_ManufacturerIDs[0x0000] = "ESTA"
-OTPModuleAdvertisementLayer_ManufacturerID = ProtoField.uint16("otp.advertisement.module.manuid", "Manufacturer ID", base.HEX, OTPModuleAdvertisementLayer_ManufacturerIDs, 0)
-local OTPModuleAdvertisementLayer_ModuleNumber = {
-	[0x0001] = "Position",
-	[0x0002] = "Position Velocity/Acceleration",
-	[0x0003] = "Rotation",
-	[0x0004] = "Rotation Velocity/Acceleration",
-	[0x0005] = "Scale",
-	[0x0006] = "Reference Frame"
-}
-OTPModuleAdvertisementLayer_ModuleNumber = ProtoField.uint16("otp.advertisement.module.number", "Module Number", base.HEX, OTPModuleAdvertisementLayer_ModuleNumber, 0)
+OTPModuleAdvertisementLayer_ManufacturerID = ProtoField.uint16("otp.advertisement.module.manuid", "Manufacturer ID", base.HEX, OTP_MANUFACTURERIDS, 0)
+OTPModuleAdvertisementLayer_ModuleNumber = ProtoField.uint16("otp.advertisement.module.number", "Module Number", base.HEX, OTP_MODULENUMBERS, 0)
 
 local SIZE_OTPADVERTISMENTNAME = SIZE_VECTOR + SIZE_LENGTH + SIZE_OPTIONS + SIZE_RESERVED
 local OTPNameAdvertisementLayer_Vectors = {
@@ -114,6 +117,11 @@ OTPPointLayer_PointNumber = ProtoField.uint32("otp.transform.point.point", "Poin
 OTPPointLayer_Timestamp = ProtoField.relative_time("otp.transform.point.timestamp", "Timestamp", "Microseconds since the Time Origin")
 OTPPointLayer_Options = ProtoField.uint8("otp.transform.point.options", "Options", base.HEX) -- "Options Flags"
 OTPPointLayer_Reserved = ProtoField.uint32("otp.transform.point.reserved", "Reserved", base.HEX) -- "Reserved"
+
+local SIZE_OTPMODULE = SIZE_MANUFACTURERID + SIZE_LENGTH + SIZE_MODULENUMBER
+OTPModuleLayer_ManufacturerID = ProtoField.uint16("otp.transform.module.manuid", "Manufacturer ID", base.HEX, OTP_MANUFACTURERIDS, 0)
+OTPModuleLayer_Length = ProtoField.uint16("otp.transform.module.length", "Length", base.DEC) -- "Length of PDU"
+OTPModuleLayer_ModuleNumber = ProtoField.uint16("otp.transform.module.number", "Module Number", base.HEX, OTP_MODULENUMBERS, 0)
 
 otp.fields = { 
 	-- OTP Layer
@@ -175,7 +183,12 @@ otp.fields = {
 	OTPPointLayer_PointNumber,
 	OTPPointLayer_Timestamp,
 	OTPPointLayer_Options,
-	OTPPointLayer_Reserved
+	OTPPointLayer_Reserved,
+	
+	-- Module Layer
+	OTPModuleLayer_ManufacturerID,
+	OTPModuleLayer_Length,
+	OTPModuleLayer_ModuleNumber
 }
 
 function heuristic_checker(tvbuf, pktinfo, root)
@@ -245,7 +258,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 	idx = idx + SIZE_NAME
 	
 	if OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_TRANSFORM_MESSAGE" then
-		 TransformMessage(tvbuf, idx, tree)
+		TransformMessage(tvbuf, idx, tree)
 	elseif OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MESSAGE" then
 		AdvertisementMessage(tvbuf, idx, tree)
 	else
@@ -285,31 +298,31 @@ function TransformMessage(tvbuf, start, tree)
 	idx = idx + SIZE_RESERVED
 	
 	if OTPTransformLayer_Vectors[vector:uint()] == "VECTOR_OTP_POINT" then
-		 Point(tvbuf, idx, tree)
-	else
-		return
+		-- Point PDUs
+		while (idx < start + length:uint() ) do
+			local res = Point(tvbuf, idx, subtree)
+			if (res == 0) then break end --TODO Hightlight this has an error state
+			idx = idx + res
+		end
 	end
 end
 
 function Point(tvbuf, start, tree)
 	local idx = start
-	if tvbuf:len() < start + SIZE_OTPPOINT then return false end
-	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPPOINT), "Point Layer")
+	if tvbuf:len() < start + SIZE_OTPPOINT then return 0 end
 	
 	local vector = tvbuf(idx, SIZE_VECTOR)
 	idx = idx + SIZE_VECTOR
-	subtree:add(OTPPointLayer_Vector, vector)
 	
 	local length = tvbuf(idx, SIZE_LENGTH)
 	idx = idx + SIZE_LENGTH
-	local lengthItem = subtree:add(OTPPointLayer_Length, length)
-	local lengthOffset = tvbuf:len() - start - (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
-	if lengthOffset > 0 then
-		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too long")
-	elseif lengthOffset < 0 then
-		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too short")
-	end
 	
+	local PDULength = (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
+	if tvbuf:len() < start + PDULength then return 0 end
+	local subtree = tree:add(otp, tvbuf(start, PDULength), "Point Layer")
+	subtree:add(OTPPointLayer_Vector, vector)
+	subtree:add(OTPPointLayer_Length, length)
+
 	subtree:add(OTPPointLayer_Priority, tvbuf(idx, SIZE_PRIORITY))
 	idx = idx + SIZE_PRIORITY
 	
@@ -329,10 +342,38 @@ function Point(tvbuf, start, tree)
 	idx = idx + SIZE_RESERVED
 	
 	if OTPPointLayer_Vectors[vector:uint()] == "VECTOR_OTP_MODULE" then
-		 Module(tvbuf, idx, tree)
-	else
-		return
+		-- Module PDUs
+		while (idx < start + length:uint() ) do
+			local res = Module(tvbuf, idx, subtree)
+			if (res == 0) then break end --TODO Hightlight this has an error state
+			idx = idx + res
+		end
 	end
+	
+	return PDULength
+end
+
+function Module(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULE then return 0 end
+	
+	local manuid = tvbuf(idx, SIZE_MANUFACTURERID)
+	idx = idx + SIZE_MANUFACTURERID
+
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+
+	local modulenum = tvbuf(idx, SIZE_MODULENUMBER)
+	idx = idx + SIZE_MODULENUMBER
+	
+	local PDULength = (length:uint() + (SIZE_MANUFACTURERID + SIZE_LENGTH))
+	if tvbuf:len() < start + PDULength then return 0 end
+	local subtree = tree:add(otp, tvbuf(start, PDULength), "Module Layer")
+	subtree:add(OTPModuleLayer_ManufacturerID, manuid)
+	subtree:add(OTPModuleLayer_Length, length)
+	subtree:add(OTPModuleLayer_ModuleNumber, modulenum)
+	
+	return PDULength
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
