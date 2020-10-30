@@ -15,6 +15,23 @@ local SIZE_NAME = 32
 local SIZE_SYSTEM = 1
 local SIZE_GROUP = 2
 local SIZE_POINT = 4
+local SIZE_TIMESTAMP = 8
+local SIZE_PRIORITY = 1
+local SIZE_MANUFACTURERID = 2
+local SIZE_MODULENUMBER = 2
+
+local OTP_MANUFACTURERIDS = {
+	[0x0000] = "ESTA"
+}
+
+local OTP_MODULENUMBERS = {
+	[0x0001] = "Position",
+	[0x0002] = "Position Velocity/Acceleration",
+	[0x0003] = "Rotation",
+	[0x0004] = "Rotation Velocity/Acceleration",
+	[0x0005] = "Scale",
+	[0x0006] = "Reference Frame"
+}
 
 local SIZE_OTPLAYER = OTP_IDENT:len() + SIZE_VECTOR + SIZE_LENGTH + SIZE_FOOTER_OPTIONS + SIZE_FOOTER_LENGTH + SIZE_CID + SIZE_FOLIO + SIZE_PAGE + SIZE_PAGE + SIZE_OPTIONS + SIZE_RESERVED + SIZE_NAME
 OTPLayer_Ident = ProtoField.string("otp.ident", "OTP Packet Identifier", base.ASCII, "Identifies this message as OTP")
@@ -45,26 +62,14 @@ OTPAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.length", "Le
 OTPAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.reserved", "Reserved", base.HEX) -- "Reserved"
 
 local SIZE_OTPADVERTISMENTMODULE = SIZE_VECTOR + SIZE_LENGTH + SIZE_RESERVED
-local SIZE_MANUFACTURERID = 2
-local SIZE_MODULENUMBER = 2
 local OTPModuleAdvertisementLayer_Vectors = {
 	[0x0001] = "VECTOR_OTP_ADVERTISEMENT_MODULE_LIST"
 }
 OTPModuleAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.module.vector", "Vector", base.HEX, OTPAdvertisementLayer_Vectors, 0, "Identifies Module Advertisement data as module list")
 OTPModuleAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.module.length", "Length", base.DEC) -- "Length of PDU"
 OTPModuleAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.module.reserved", "Reserved", base.HEX) -- "Reserved"
-local OTPModuleAdvertisementLayer_ManufacturerIDs = {}
-OTPModuleAdvertisementLayer_ManufacturerIDs[0x0000] = "ESTA"
-OTPModuleAdvertisementLayer_ManufacturerID = ProtoField.uint16("otp.advertisement.module.manuid", "Manufacturer ID", base.HEX, OTPModuleAdvertisementLayer_ManufacturerIDs, 0)
-local OTPModuleAdvertisementLayer_ModuleNumber = {
-	[0x0001] = "Position",
-	[0x0002] = "Position Velocity/Acceleration",
-	[0x0003] = "Rotation",
-	[0x0004] = "Rotation Velocity/Acceleration",
-	[0x0005] = "Scale",
-	[0x0006] = "Reference Frame"
-}
-OTPModuleAdvertisementLayer_ModuleNumber = ProtoField.uint16("otp.advertisement.module.number", "Module Number", base.HEX, OTPModuleAdvertisementLayer_ModuleNumber, 0)
+OTPModuleAdvertisementLayer_ManufacturerID = ProtoField.uint16("otp.advertisement.module.manuid", "Manufacturer ID", base.HEX, OTP_MANUFACTURERIDS, 0)
+OTPModuleAdvertisementLayer_ModuleNumber = ProtoField.uint16("otp.advertisement.module.number", "Module Number", base.HEX, OTP_MODULENUMBERS, 0)
 
 local SIZE_OTPADVERTISMENTNAME = SIZE_VECTOR + SIZE_LENGTH + SIZE_OPTIONS + SIZE_RESERVED
 local OTPNameAdvertisementLayer_Vectors = {
@@ -83,12 +88,94 @@ local SIZE_OTPADVERTISMENTSYSTEM = SIZE_VECTOR + SIZE_LENGTH + SIZE_OPTIONS + SI
 local OTPSystemAdvertisementLayer_Vectors = {
 	[0x0001] = "VECTOR_OTP_ADVERTISEMENT_SYSTEM_LIST"
 }
-OTPSystemAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.system.vector", "Vector", base.HEX, OTPNameAdvertisementLayer_Vectors, 0, "Identifies System Advertisement data as system number list")
+OTPSystemAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.system.vector", "Vector", base.HEX, OTPSystemAdvertisementLayer_Vectors, 0, "Identifies System Advertisement data as system number list")
 OTPSystemAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.system.length", "Length", base.DEC) -- "Length of PDU"
 OTPSystemAdvertisementLayer_Request = ProtoField.uint8("otp.advertisement.system.request", "Request/Response", base.DEC, {[0] = "Request", [1] = "Response"}, 0x80, "Options Flags") 
 OTPSystemAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.system.reserved", "Reserved", base.HEX) -- "Reserved"
 OTPSystemAdvertisementLayer_SystemNumber = ProtoField.uint8("otp.advertisement.name.system", "System", base.DEC)
 	
+local SIZE_OTPTRANSFORM	= SIZE_VECTOR + SIZE_LENGTH + SIZE_SYSTEM + SIZE_TIMESTAMP + SIZE_OPTIONS + SIZE_RESERVED
+local OTPTransformLayer_Vectors = {
+	[0x0001] = "VECTOR_OTP_POINT"
+}
+OTPTransformLayer_Vector = ProtoField.uint16("otp.transform.vector", "Vector", base.HEX, OTPTransformLayer_Vectors, 0, "Identifies transform data as OTP Point PDU")
+OTPTransformLayer_Length = ProtoField.uint16("otp.transform.length", "Length", base.DEC) -- "Length of PDU"
+OTPTransformLayer_SystemNumber = ProtoField.uint8("otp.transform.system", "System", base.DEC)
+OTPTransformLayer_Timestamp = ProtoField.relative_time("otp.transform.timestamp", "Timestamp", "Microseconds since the Time Origin")
+OTPTransformLayer_Pointset = ProtoField.uint8("otp.transform.pointset", "Full Point Set", base.DEC, {[0] = "Subset", [1] = "Full set"}, 0x80, "Options Flags")
+OTPTransformLayer_Reserved = ProtoField.uint32("otp.transform.reserved", "Reserved", base.HEX) -- "Reserved"
+
+local SIZE_OTPPOINT = SIZE_VECTOR + SIZE_LENGTH + SIZE_PRIORITY + SIZE_GROUP + SIZE_POINT + SIZE_TIMESTAMP + SIZE_OPTIONS + SIZE_RESERVED
+local OTPPointLayer_Vectors = {
+	[0x0001] = "VECTOR_OTP_MODULE"
+}
+OTPPointLayer_Vector = ProtoField.uint16("otp.transform.point.vector", "Vector", base.HEX, OTPPointLayer_Vectors, 0, "Identifies Point data as OTP Module PDU")
+OTPPointLayer_Length = ProtoField.uint16("otp.transform.point.length", "Length", base.DEC) -- "Length of PDU"
+OTPPointLayer_Priority = ProtoField.uint8("otp.transform.point.priority", "Priority", base.DEC) -- "Data priority if multiple sources for this Address"
+OTPPointLayer_GroupNumber = ProtoField.uint16("otp.transform.point.group", "Group Number", base.DEC)
+OTPPointLayer_PointNumber = ProtoField.uint32("otp.transform.point.point", "Point Number", base.DEC)
+OTPPointLayer_Timestamp = ProtoField.relative_time("otp.transform.point.timestamp", "Timestamp", "Microseconds since the Time Origin")
+OTPPointLayer_Options = ProtoField.uint8("otp.transform.point.options", "Options", base.HEX) -- "Options Flags"
+OTPPointLayer_Reserved = ProtoField.uint32("otp.transform.point.reserved", "Reserved", base.HEX) -- "Reserved"
+
+local SIZE_OTPMODULE = SIZE_MANUFACTURERID + SIZE_LENGTH + SIZE_MODULENUMBER
+OTPModuleLayer_ManufacturerID = ProtoField.uint16("otp.transform.module.manuid", "Manufacturer ID", base.HEX, OTP_MANUFACTURERIDS, 0)
+OTPModuleLayer_Length = ProtoField.uint16("otp.transform.module.length", "Length", base.DEC) -- "Length of PDU"
+OTPModuleLayer_ModuleNumber = ProtoField.uint16("otp.transform.module.number", "Module Number", base.HEX, OTP_MODULENUMBERS, 0)
+
+local SIZE_ESTAPOSITION = 4
+local SIZE_OTPMODULEESTAPOSITION = SIZE_OPTIONS + SIZE_ESTAPOSITION + SIZE_ESTAPOSITION + SIZE_ESTAPOSITION
+OTPModuleESTAPosition_Scaling = ProtoField.uint8("otp.transform.module.esta.position.scaling", "Scaling", base.DEC, {[0] = "μm", [1] = "mm"}, 0x80, "Options Flags")
+OTPModuleESTAPosition_X = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.x", "X", base.UNIT_STRING, {" μm"}), -- "The X location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.x", "X", base.UNIT_STRING, {" mm"}) -- "The X location of the Point in mm"
+}
+OTPModuleESTAPosition_Y = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.y", "Y", base.UNIT_STRING, {" μm"}), -- "The Y location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.y", "Y", base.UNIT_STRING, {" mm"}) -- "The Y location of the Point in mm"
+}
+OTPModuleESTAPosition_Z = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.z", "Z", base.UNIT_STRING, {" μm"}), -- "The Z location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.z", "Z", base.UNIT_STRING, {" mm"}) -- "The Z location of the Point in mm"
+}
+
+local SIZE_ESTAVELOCITY = 4
+local SIZE_ESTAACCELERATION = 4
+local SIZE_OTPMODULEESTAVELOCITY = SIZE_ESTAVELOCITY + SIZE_ESTAVELOCITY + SIZE_ESTAVELOCITY + SIZE_ESTAACCELERATION + SIZE_ESTAACCELERATION + SIZE_ESTAACCELERATION
+OTPModuleESTAPositionVelocity_X = ProtoField.int32("otp.transform.module.esta.position.vx", "Vx", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the X direction of the Point in μm/s"
+OTPModuleESTAPositionVelocity_Y = ProtoField.int32("otp.transform.module.esta.position.vy", "Vy", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the Y direction of the Point in μm/s"
+OTPModuleESTAPositionVelocity_Z = ProtoField.int32("otp.transform.module.esta.position.vz", "Vz", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the Z direction of the Point in μm/s"
+OTPModuleESTAPositionAcceleration_X = ProtoField.int32("otp.transform.module.esta.position.ax", "Ax", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+OTPModuleESTAPositionAcceleration_Y = ProtoField.int32("otp.transform.module.esta.position.ay", "Ay", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+OTPModuleESTAPositionAcceleration_Z = ProtoField.int32("otp.transform.module.esta.position.az", "Az", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+
+local SIZE_ESTAROTATION = 4
+local SIZE_OTPMODULEESTAROTATION = SIZE_ESTAROTATION + SIZE_ESTAROTATION + SIZE_ESTAROTATION
+OTPModuleESTARotation_X = ProtoField.uint32("otp.transform.module.esta.rotaion.x", "Rx", base.UNIT_STRING, {" x10^(−6)°"}) -- "The Euler X rotation of the Point in millionths of a decimal degree"
+OTPModuleESTARotation_Y = ProtoField.uint32("otp.transform.module.esta.rotaion.y", "Ry", base.UNIT_STRING, {" x10^(−6)°"}) -- "The Euler Y rotation of the Point in millionths of a decimal degree"
+OTPModuleESTARotation_Z = ProtoField.uint32("otp.transform.module.esta.rotaion.z", "Rz", base.UNIT_STRING, {" x10^(−6)°"}) -- "The Euler Z rotation of the Point in millionths of a decimal degree"
+
+local SIZE_ESTAROTATIONVELOCITY = 4
+local SIZE_ESTAROTATIONACCELERATION = 4
+local SIZE_OTPMODULEESTAROTATIONVELOCITY = SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONACCELERATION + SIZE_ESTAROTATIONACCELERATION + SIZE_ESTAROTATIONACCELERATION
+OTPModuleESTARotationVelocity_X = ProtoField.int32("otp.transform.module.esta.rotation.vrx", "Vrx", base.UNIT_STRING, {" x10^(−3)°/s"}) -- "The velocity of Euler X rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationVelocity_Y = ProtoField.int32("otp.transform.module.esta.rotation.vry", "Vry", base.UNIT_STRING, {" x10^(−3)°/s"}) -- "The velocity of Euler Y rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationnVelocity_Z = ProtoField.int32("otp.transform.module.esta.rotation.vrz", "Vrz", base.UNIT_STRING, {" x10^(−3)/s"}) -- "The velocity of Euler Z rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationAcceleration_X = ProtoField.int32("otp.transform.module.esta.rotation.arx", "Arx", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler X rotation of the Point in thousandths of a decimal degree/s2"
+OTPModuleESTARotationAcceleration_Y = ProtoField.int32("otp.transform.module.esta.rotation.ary", "Ary", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Y rotation of the Point in thousandths of a decimal degree/s2"
+OTPModuleESTARotationAcceleration_Z = ProtoField.int32("otp.transform.module.esta.rotation.arz", "Arz", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Z rotation of the Point in thousandths of a decimal degree/s2"
+
+local SIZE_ESTASCALE = 4
+local SIZE_OPTMODULEESTASCALE = SIZE_ESTASCALE + SIZE_ESTASCALE + SIZE_ESTASCALE
+OTPModuleESTAScale_X = ProtoField.int32("otp.transform.module.esta.scale.x", "X", base.DEC) -- "The scale of the Point in the X direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+OTPModuleESTAScale_Y = ProtoField.int32("otp.transform.module.esta.scale.y", "Y", base.DEC) -- "The scale of the Point in the Y direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+OTPModuleESTAScale_Z = ProtoField.int32("otp.transform.module.esta.scale.z", "Z", base.DEC) -- "The scale of the Point in the X direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+
+local SIZE_OTPMODULEESTAREFERENCE = SIZE_SYSTEM + SIZE_GROUP + SIZE_POINT
+OTPModuleEstaReference_SystemNumber = ProtoField.uint8("otp.transform.module.esta.reference.system", "Reference System", base.DEC)
+OTPModuleEstaReference_GroupNumber = ProtoField.uint16("otp.transform.module.esta.reference.group", "Reference Group", base.DEC)
+OTPModuleEstaReference_PointNumber = ProtoField.uint32("otp.transform.module.esta.reference.point", "Reference Point", base.DEC)
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -131,8 +218,71 @@ otp.fields = {
 	OTPSystemAdvertisementLayer_Length,
 	OTPSystemAdvertisementLayer_Request,
 	OTPSystemAdvertisementLayer_Reserved,
-	OTPSystemAdvertisementLayer_SystemNumber
+	OTPSystemAdvertisementLayer_SystemNumber,
+	
+	-- Transform
+	OTPTransformLayer_Vector,
+	OTPTransformLayer_Length,
+	OTPTransformLayer_SystemNumber,
+	OTPTransformLayer_Timestamp,
+	OTPTransformLayer_Pointset,
+	OTPTransformLayer_Reserved,
+	
+	-- Point Layer
+	OTPPointLayer_Vector,
+	OTPPointLayer_Length,
+	OTPPointLayer_Priority,
+	OTPPointLayer_GroupNumber,
+	OTPPointLayer_PointNumber,
+	OTPPointLayer_Timestamp,
+	OTPPointLayer_Options,
+	OTPPointLayer_Reserved,
+	
+	-- Module Layer
+	OTPModuleLayer_ManufacturerID,
+	OTPModuleLayer_Length,
+	OTPModuleLayer_ModuleNumber,
+	
+	-- Module ESTA Position
+	OTPModuleESTAPosition_Scaling,
+	OTPModuleESTAPosition_X[0],OTPModuleESTAPosition_X[1],
+	OTPModuleESTAPosition_Y[0],OTPModuleESTAPosition_Y[1],
+	OTPModuleESTAPosition_Z[0],OTPModuleESTAPosition_Z[1],
+	
+	-- Module ESTA Position Velocity/Acceleration
+	OTPModuleESTAPositionVelocity_X,
+	OTPModuleESTAPositionVelocity_Y,
+	OTPModuleESTAPositionVelocity_Z,
+	OTPModuleESTAPositionAcceleration_X,
+	OTPModuleESTAPositionAcceleration_Y,
+	OTPModuleESTAPositionAcceleration_Z,
+	
+	-- Module ESTA Rotation Module
+	OTPModuleESTARotation_X,
+	OTPModuleESTARotation_Y,
+	OTPModuleESTARotation_Z,
+	
+	-- Module ESTA Rotation Velocity/Acceleration 
+	OTPModuleESTARotationVelocity_X,
+	OTPModuleESTARotationVelocity_Y,
+	OTPModuleESTARotationnVelocity_Z,
+	OTPModuleESTARotationAcceleration_X,
+	OTPModuleESTARotationAcceleration_Y,
+	OTPModuleESTARotationAcceleration_Z,
+	
+	-- Module ESTA Scale
+	OTPModuleESTAScale_X,
+	OTPModuleESTAScale_Y,
+	OTPModuleESTAScale_Z,
+	
+	-- Module ESTA Reference
+	OTPModuleEstaReference_SystemNumber,
+	OTPModuleEstaReference_GroupNumber,
+	OTPModuleEstaReference_PointNumber
 }
+
+-- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
+local bitty = require "bitty"
 
 function heuristic_checker(tvbuf, pktinfo, root)
 	-- Check ident
@@ -201,7 +351,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 	idx = idx + SIZE_NAME
 	
 	if OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_TRANSFORM_MESSAGE" then
-		 
+		TransformMessage(tvbuf, idx, tree)
 	elseif OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MESSAGE" then
 		AdvertisementMessage(tvbuf, idx, tree)
 	else
@@ -209,8 +359,243 @@ function otp.dissector(tvbuf, pktinfo, root)
 	end
 end
 
-function TransformMessage(tvbuf, tree)
+function TransformMessage(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPTRANSFORM then return false end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPTRANSFORM), "Transform Layer")
+	
+	local vector = tvbuf(idx, SIZE_VECTOR)
+	idx = idx + SIZE_VECTOR
+	subtree:add(OTPTransformLayer_Vector, vector)
 
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+	local lengthItem = subtree:add(OTPTransformLayer_Length, length)
+	local lengthOffset = tvbuf:len() - start - (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
+	if lengthOffset > 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too long")
+	elseif lengthOffset < 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too short")
+	end
+	
+	subtree:add(OTPTransformLayer_SystemNumber, tvbuf(idx, SIZE_SYSTEM))
+	idx = idx + SIZE_SYSTEM
+	
+	subtree:add(OTPTransformLayer_Timestamp, tvbuf(idx, SIZE_TIMESTAMP))
+	idx = idx + SIZE_TIMESTAMP
+	
+	subtree:add(OTPTransformLayer_Pointset, tvbuf(idx, SIZE_OPTIONS))
+	idx = idx + SIZE_OPTIONS
+	
+	subtree:add(OTPTransformLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
+	idx = idx + SIZE_RESERVED
+	
+	if OTPTransformLayer_Vectors[vector:uint()] == "VECTOR_OTP_POINT" then
+		-- Point PDUs
+		while (idx < start + length:uint() ) do
+			local res = Point(tvbuf, idx, subtree)
+			if (res == 0) then break end --TODO Hightlight this has an error state
+			idx = idx + res
+		end
+	end
+end
+
+function Point(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPPOINT then return 0 end
+	
+	local vector = tvbuf(idx, SIZE_VECTOR)
+	idx = idx + SIZE_VECTOR
+	
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+	
+	local PDULength = (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
+	if tvbuf:len() < start + PDULength then return 0 end
+	local subtree = tree:add(otp, tvbuf(start, PDULength), "Point Layer")
+	subtree:add(OTPPointLayer_Vector, vector)
+	subtree:add(OTPPointLayer_Length, length)
+
+	subtree:add(OTPPointLayer_Priority, tvbuf(idx, SIZE_PRIORITY))
+	idx = idx + SIZE_PRIORITY
+	
+	subtree:add(OTPPointLayer_GroupNumber, tvbuf(idx, SIZE_GROUP))
+	idx = idx + SIZE_GROUP
+	
+	subtree:add(OTPPointLayer_PointNumber, tvbuf(idx, SIZE_POINT))
+	idx = idx + SIZE_POINT
+	
+	subtree:add(OTPPointLayer_Timestamp, tvbuf(idx, SIZE_TIMESTAMP))
+	idx = idx + SIZE_TIMESTAMP
+	
+	subtree:add(OTPPointLayer_Options, tvbuf(idx, SIZE_OPTIONS))
+	idx = idx + SIZE_OPTIONS
+	
+	subtree:add(OTPPointLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
+	idx = idx + SIZE_RESERVED
+	
+	if OTPPointLayer_Vectors[vector:uint()] == "VECTOR_OTP_MODULE" then
+		-- Module PDUs
+		while (idx < start + length:uint() ) do
+			local res = Module(tvbuf, idx, subtree)
+			if (res == 0) then break end --TODO Hightlight this has an error state
+			idx = idx + res
+		end
+	end
+	
+	return PDULength
+end
+
+function Module(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULE then return 0 end
+	
+	local manuid = tvbuf(idx, SIZE_MANUFACTURERID)
+	idx = idx + SIZE_MANUFACTURERID
+
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+
+	local modulenum = tvbuf(idx, SIZE_MODULENUMBER)
+	idx = idx + SIZE_MODULENUMBER
+	
+	local PDULength = (length:uint() + (SIZE_MANUFACTURERID + SIZE_LENGTH))
+	if tvbuf:len() < start + PDULength then return 0 end
+	local subtree = tree:add(otp, tvbuf(start, PDULength), "Module Layer")
+	subtree:add(OTPModuleLayer_ManufacturerID, manuid)
+	subtree:add(OTPModuleLayer_Length, length)
+	subtree:add(OTPModuleLayer_ModuleNumber, modulenum)
+	
+	if OTP_MANUFACTURERIDS[manuid:uint()] == "ESTA" then
+		if OTP_MODULENUMBERS[modulenum:uint()] == "Position" then
+			ModuleEstaPosition(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Position Velocity/Acceleration" then
+			ModuleEstaPositionVelocityAcceleration(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation" then
+			ModuleEstaRotation(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation Velocity/Acceleration" then
+			ModuleEstaRotationVelocityAcceleration(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Scale" then
+			ModuleEstaScale(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Reference Frame" then
+			ModuleEstaReference(tvbuf, idx, subtree)
+		end
+	end
+	
+	return PDULength
+end
+
+function ModuleEstaPosition(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAPOSITION then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAPOSITION), "ESTA Position")
+	
+	local scaling = tvbuf(idx, SIZE_OPTIONS)
+	subtree:add(OTPModuleESTAPosition_Scaling, scaling)
+	idx = idx + SIZE_OPTIONS
+
+	local scale = bitty.brshift(bitty.band(scaling:uint(),0x80), 7)
+	subtree:add(OTPModuleESTAPosition_X[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
+
+	subtree:add(OTPModuleESTAPosition_Y[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
+	
+	subtree:add(OTPModuleESTAPosition_Z[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
+end
+
+function ModuleEstaPositionVelocityAcceleration(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAVELOCITY then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAVELOCITY), "ESTA Velocity/Acceleration")
+
+	subtree:add(OTPModuleESTAPositionVelocity_X, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionVelocity_Y, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionVelocity_Z, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_X, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_Y, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_Z, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
+end
+
+function ModuleEstaRotation(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAROTATION then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAROTATION), "ESTA Rotation")
+	
+	subtree:add(OTPModuleESTARotation_X, tvbuf(idx, SIZE_ESTAROTATION))
+	idx = idx + SIZE_ESTAPOSITION
+
+	subtree:add(OTPModuleESTARotation_Y, tvbuf(idx, SIZE_ESTAROTATION))
+	idx = idx + SIZE_ESTAPOSITION
+	
+	subtree:add(OTPModuleESTARotation_Z, tvbuf(idx, SIZE_ESTAROTATION))
+	idx = idx + SIZE_ESTAPOSITION	
+end
+
+function ModuleEstaRotationVelocityAcceleration(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAROTATIONVELOCITY then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAROTATIONVELOCITY), "ESTA Rotation Velocity/Acceleration")
+
+	subtree:add(OTPModuleESTARotationVelocity_X, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationVelocity_Y, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationnVelocity_Z, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationAcceleration_X, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
+	
+	subtree:add(OTPModuleESTARotationAcceleration_Y, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
+	
+	subtree:add(OTPModuleESTARotationAcceleration_Z, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
+end
+
+function ModuleEstaScale(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OPTMODULEESTASCALE then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OPTMODULEESTASCALE), "ESTA Scale")
+	
+	subtree:add(OTPModuleESTAScale_X, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE
+
+	subtree:add(OTPModuleESTAScale_Y, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE
+	
+	subtree:add(OTPModuleESTAScale_Z, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE	
+end
+
+function ModuleEstaReference(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAREFERENCE then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAREFERENCE), "ESTA Reference")
+	
+	subtree:add(OTPModuleEstaReference_SystemNumber, tvbuf(idx, SIZE_SYSTEM))
+	idx = idx + SIZE_SYSTEM
+
+	subtree:add(OTPModuleEstaReference_GroupNumber, tvbuf(idx, SIZE_GROUP))
+	idx = idx + SIZE_GROUP
+	
+	subtree:add(OTPModuleEstaReference_PointNumber, tvbuf(idx, SIZE_POINT))
+	idx = idx + SIZE_POINT		
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
