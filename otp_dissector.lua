@@ -102,7 +102,7 @@ OTPTransformLayer_Vector = ProtoField.uint16("otp.transform.vector", "Vector", b
 OTPTransformLayer_Length = ProtoField.uint16("otp.transform.length", "Length", base.DEC) -- "Length of PDU"
 OTPTransformLayer_SystemNumber = ProtoField.uint8("otp.transform.system", "System", base.DEC)
 OTPTransformLayer_Timestamp = ProtoField.relative_time("otp.transform.timestamp", "Timestamp", "Microseconds since the Time Origin")
-OTPTransformLayer_Pointset = ProtoField.uint8("otp.transform.pointset", "Full Point Set",  base.DEC, {[0] = "Subset", [1] = "Full set"}, 0x80, "Options Flags")
+OTPTransformLayer_Pointset = ProtoField.uint8("otp.transform.pointset", "Full Point Set", base.DEC, {[0] = "Subset", [1] = "Full set"}, 0x80, "Options Flags")
 OTPTransformLayer_Reserved = ProtoField.uint32("otp.transform.reserved", "Reserved", base.HEX) -- "Reserved"
 
 local SIZE_OTPPOINT = SIZE_VECTOR + SIZE_LENGTH + SIZE_PRIORITY + SIZE_GROUP + SIZE_POINT + SIZE_TIMESTAMP + SIZE_OPTIONS + SIZE_RESERVED
@@ -122,6 +122,22 @@ local SIZE_OTPMODULE = SIZE_MANUFACTURERID + SIZE_LENGTH + SIZE_MODULENUMBER
 OTPModuleLayer_ManufacturerID = ProtoField.uint16("otp.transform.module.manuid", "Manufacturer ID", base.HEX, OTP_MANUFACTURERIDS, 0)
 OTPModuleLayer_Length = ProtoField.uint16("otp.transform.module.length", "Length", base.DEC) -- "Length of PDU"
 OTPModuleLayer_ModuleNumber = ProtoField.uint16("otp.transform.module.number", "Module Number", base.HEX, OTP_MODULENUMBERS, 0)
+
+local SIZE_ESTAPOSITION = 4
+local SIZE_OTPMODULEESTAPOSITION = SIZE_OPTIONS + SIZE_ESTAPOSITION + SIZE_ESTAPOSITION + SIZE_ESTAPOSITION
+OTPModuleESTAPosition_Scaling = ProtoField.uint8("otp.transform.module.esta.position.scaling", "Scaling", base.DEC, {[0] = "μm", [1] = "mm"}, 0x80, "Options Flags")
+OTPModuleESTAPosition_X = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.x", "X", base.UNIT_STRING, {" μm"}), -- "The X location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.x", "X", base.UNIT_STRING, {" mm"}) -- "The X location of the Point in mm"
+}
+OTPModuleESTAPosition_Y = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.y", "Y", base.UNIT_STRING, {" μm"}), -- "The Y location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.y", "Y", base.UNIT_STRING, {" mm"}) -- "The Y location of the Point in mm"
+}
+OTPModuleESTAPosition_Z = {
+	[0] = ProtoField.int32("otp.transform.module.esta.position.z", "Z", base.UNIT_STRING, {" μm"}), -- "The Z location of the Point in μm"
+	[1] = ProtoField.int32("otp.transform.module.esta.position.z", "Z", base.UNIT_STRING, {" mm"}) -- "The Z location of the Point in mm"
+}
 
 otp.fields = { 
 	-- OTP Layer
@@ -188,8 +204,17 @@ otp.fields = {
 	-- Module Layer
 	OTPModuleLayer_ManufacturerID,
 	OTPModuleLayer_Length,
-	OTPModuleLayer_ModuleNumber
+	OTPModuleLayer_ModuleNumber,
+	
+	-- Module ESTA Position
+	OTPModuleESTAPosition_Scaling,
+	OTPModuleESTAPosition_X[0],OTPModuleESTAPosition_X[1],
+	OTPModuleESTAPosition_Y[0],OTPModuleESTAPosition_Y[1],
+	OTPModuleESTAPosition_Z[0],OTPModuleESTAPosition_Z[1]
 }
+
+-- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
+local bitty = require "bitty"
 
 function heuristic_checker(tvbuf, pktinfo, root)
 	-- Check ident
@@ -373,7 +398,43 @@ function Module(tvbuf, start, tree)
 	subtree:add(OTPModuleLayer_Length, length)
 	subtree:add(OTPModuleLayer_ModuleNumber, modulenum)
 	
+	if OTP_MANUFACTURERIDS[manuid:uint()] == "ESTA" then
+		if OTP_MODULENUMBERS[modulenum:uint()] == "Position" then
+			ModuleEstaPosition(tvbuf, idx, subtree)
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Position Velocity/Acceleration" then
+		
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation" then
+		
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation Velocity/Acceleration" then
+		
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Scale" then
+		
+		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Reference Frame" then
+
+		end
+	end
+	
 	return PDULength
+end
+
+function ModuleEstaPosition(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAPOSITION then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAPOSITION), "ESTA Position")
+	
+	local scaling = tvbuf(idx, SIZE_OPTIONS)
+	subtree:add(OTPModuleESTAPosition_Scaling, scaling)
+	idx = idx + SIZE_OPTIONS
+
+	local scale = bitty.brshift(bitty.band(scaling:uint(),0x80), 7)
+	subtree:add(OTPModuleESTAPosition_X[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
+
+	subtree:add(OTPModuleESTAPosition_Y[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
+	
+	subtree:add(OTPModuleESTAPosition_Z[scale], tvbuf(idx, SIZE_ESTAPOSITION))
+	idx = idx + SIZE_ESTAPOSITION
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
