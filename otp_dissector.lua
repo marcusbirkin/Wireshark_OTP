@@ -134,19 +134,26 @@ otp.fields = {
 	OTPSystemAdvertisementLayer_SystemNumber
 }
 
+function heuristic_checker(tvbuf, pktinfo, root)
+	-- Check ident
+	if tvbuf:len() < OTP_IDENT:len() then return false end
+	if (tvbuf(0, OTP_IDENT:len()):bytes() ~= OTP_IDENT) then 
+		return false
+	else
+		otp.dissector(tvbuf, pktinfo, root)
+		pktinfo.conversation = otp
+		return true
+	end
+end
+
 function otp.dissector(tvbuf, pktinfo, root)
 	local idx = 0
 
-	-- Check ident
-	if tvbuf:len() < OTP_IDENT:len() then return end
-	if (tvbuf(0, OTP_IDENT:len()):bytes() ~= OTP_IDENT) then 
-		return
-	end
 	pktinfo.cols.protocol = otp.name
 	local tree = root:add(otp, tvbuf(), "Object Transform Protocol")
 
 	-- OTP Layer
-	if tvbuf:len() < SIZE_OTPLAYER then return -1 end
+	if tvbuf:len() < SIZE_OTPLAYER then return end
 	local subtree = tree:add(otp, tvbuf(0, SIZE_OTPLAYER), "OTP Layer")
 	
 	subtree:add(OTPLayer_Ident, tvbuf(idx, OTP_IDENT:len()))
@@ -349,5 +356,4 @@ function AdvertisementSystem(tvbuf, start, tree)
 	end
 end
 
-udp_table = DissectorTable.get("udp.port")
-udp_table:add(OTP_PORT,otp)
+otp:register_heuristic("udp", heuristic_checker)
