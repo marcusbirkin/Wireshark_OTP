@@ -15,6 +15,7 @@ local SIZE_NAME = 32
 local SIZE_SYSTEM = 1
 local SIZE_GROUP = 2
 local SIZE_POINT = 4
+local SIZE_TIMESTAMP = 8
 
 local SIZE_OTPLAYER = OTP_IDENT:len() + SIZE_VECTOR + SIZE_LENGTH + SIZE_FOOTER_OPTIONS + SIZE_FOOTER_LENGTH + SIZE_CID + SIZE_FOLIO + SIZE_PAGE + SIZE_PAGE + SIZE_OPTIONS + SIZE_RESERVED + SIZE_NAME
 OTPLayer_Ident = ProtoField.string("otp.ident", "OTP Packet Identifier", base.ASCII, "Identifies this message as OTP")
@@ -83,12 +84,23 @@ local SIZE_OTPADVERTISMENTSYSTEM = SIZE_VECTOR + SIZE_LENGTH + SIZE_OPTIONS + SI
 local OTPSystemAdvertisementLayer_Vectors = {
 	[0x0001] = "VECTOR_OTP_ADVERTISEMENT_SYSTEM_LIST"
 }
-OTPSystemAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.system.vector", "Vector", base.HEX, OTPNameAdvertisementLayer_Vectors, 0, "Identifies System Advertisement data as system number list")
+OTPSystemAdvertisementLayer_Vector = ProtoField.uint16("otp.advertisement.system.vector", "Vector", base.HEX, OTPSystemAdvertisementLayer_Vectors, 0, "Identifies System Advertisement data as system number list")
 OTPSystemAdvertisementLayer_Length = ProtoField.uint16("otp.advertisement.system.length", "Length", base.DEC) -- "Length of PDU"
 OTPSystemAdvertisementLayer_Request = ProtoField.uint8("otp.advertisement.system.request", "Request/Response", base.DEC, {[0] = "Request", [1] = "Response"}, 0x80, "Options Flags") 
 OTPSystemAdvertisementLayer_Reserved = ProtoField.uint32("otp.advertisement.system.reserved", "Reserved", base.HEX) -- "Reserved"
 OTPSystemAdvertisementLayer_SystemNumber = ProtoField.uint8("otp.advertisement.name.system", "System", base.DEC)
 	
+local SIZE_OTPTRANSFORM	= SIZE_VECTOR + SIZE_LENGTH + SIZE_SYSTEM + SIZE_TIMESTAMP + SIZE_OPTIONS + SIZE_RESERVED
+local OTPTransformLayer_Vectors = {
+	[0x0001] = "VECTOR_OTP_POINT"
+}
+OTPTransformLayer_Vector = ProtoField.uint16("otp.transform.vector", "Vector", base.HEX, OTPTransformLayer_Vectors, 0, "Identifies transform data as OTP Point PDU")
+OTPTransformLayer_Length = ProtoField.uint16("otp.transform.length", "Length", base.DEC) -- "Length of PDU"
+OTPTransformLayer_SystemNumber = ProtoField.uint8("otp.transform.system", "System", base.DEC)
+OTPTransformLayer_Timestamp = ProtoField.relative_time("otp.transform.timestamp", "Timestamp", "Microseconds since the Time Origin")
+OTPTransformLayer_Pointset = ProtoField.uint8("otp.transform.pointset", "Full Point Set",  base.DEC, {[0] = "Subset", [1] = "Full set"}, 0x80, "Options Flags")
+OTPTransformLayer_Reserved = ProtoField.uint32("otp.transform.reserved", "Reserved", base.HEX) -- "Reserved"
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -131,7 +143,15 @@ otp.fields = {
 	OTPSystemAdvertisementLayer_Length,
 	OTPSystemAdvertisementLayer_Request,
 	OTPSystemAdvertisementLayer_Reserved,
-	OTPSystemAdvertisementLayer_SystemNumber
+	OTPSystemAdvertisementLayer_SystemNumber,
+	
+	-- Transform
+	OTPTransformLayer_Vector,
+	OTPTransformLayer_Length,
+	OTPTransformLayer_SystemNumber,
+	OTPTransformLayer_Timestamp,
+	OTPTransformLayer_Pointset,
+	OTPTransformLayer_Reserved
 }
 
 function heuristic_checker(tvbuf, pktinfo, root)
@@ -201,7 +221,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 	idx = idx + SIZE_NAME
 	
 	if OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_TRANSFORM_MESSAGE" then
-		 
+		 TransformMessage(tvbuf, idx, tree)
 	elseif OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MESSAGE" then
 		AdvertisementMessage(tvbuf, idx, tree)
 	else
@@ -209,8 +229,39 @@ function otp.dissector(tvbuf, pktinfo, root)
 	end
 end
 
-function TransformMessage(tvbuf, tree)
-
+function TransformMessage(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPTRANSFORM then return false end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPTRANSFORM), "Transform Layer")
+	
+	
+	local vector = tvbuf(idx, SIZE_VECTOR)
+	idx = idx + SIZE_VECTOR
+	subtree:add(OTPTransformLayer_Vector, vector)
+	
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+	local lengthItem = subtree:add(OTPTransformLayer_Length, length)
+	local lengthOffset = tvbuf:len() - start - (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
+	if lengthOffset > 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too long")
+	elseif lengthOffset < 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too short")
+	end
+	
+	subtree:add(OTPTransformLayer_SystemNumber, tvbuf(idx, SIZE_SYSTEM))
+	idx = idx + SIZE_SYSTEM
+	
+	subtree:add(OTPTransformLayer_Timestamp, tvbuf(idx, SIZE_TIMESTAMP))
+	idx = idx + SIZE_TIMESTAMP
+	
+	subtree:add(OTPTransformLayer_Pointset, tvbuf(idx, SIZE_OPTIONS))
+	idx = idx + SIZE_OPTIONS
+	
+	subtree:add(OTPTransformLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
+	idx = idx + SIZE_RESERVED
+	
+	
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
