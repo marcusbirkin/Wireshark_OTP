@@ -171,6 +171,11 @@ OTPModuleESTAScale_X = ProtoField.int32("otp.transform.module.esta.scale.x", "X"
 OTPModuleESTAScale_Y = ProtoField.int32("otp.transform.module.esta.scale.y", "Y", base.DEC) -- "The scale of the Point in the Y direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
 OTPModuleESTAScale_Z = ProtoField.int32("otp.transform.module.esta.scale.z", "Z", base.DEC) -- "The scale of the Point in the X direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
 
+local SIZE_OTPMODULEESTAREFERENCE = SIZE_SYSTEM + SIZE_GROUP + SIZE_POINT
+OTPModuleEstaReference_SystemNumber = ProtoField.uint8("otp.transform.module.esta.reference.system", "Reference System", base.DEC)
+OTPModuleEstaReference_GroupNumber = ProtoField.uint16("otp.transform.module.esta.reference.group", "Reference Group", base.DEC)
+OTPModuleEstaReference_PointNumber = ProtoField.uint32("otp.transform.module.esta.reference.point", "Reference Point", base.DEC)
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -268,7 +273,12 @@ otp.fields = {
 	-- Module ESTA Scale
 	OTPModuleESTAScale_X,
 	OTPModuleESTAScale_Y,
-	OTPModuleESTAScale_Z
+	OTPModuleESTAScale_Z,
+	
+	-- Module ESTA Reference
+	OTPModuleEstaReference_SystemNumber,
+	OTPModuleEstaReference_GroupNumber,
+	OTPModuleEstaReference_PointNumber
 }
 
 -- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
@@ -468,7 +478,7 @@ function Module(tvbuf, start, tree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Scale" then
 			ModuleEstaScale(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Reference Frame" then
-
+			ModuleEstaReference(tvbuf, idx, subtree)
 		end
 	end
 	
@@ -571,6 +581,21 @@ function ModuleEstaScale(tvbuf, start, tree)
 	
 	subtree:add(OTPModuleESTAScale_Z, tvbuf(idx, SIZE_ESTASCALE))
 	idx = idx + SIZE_ESTASCALE	
+end
+
+function ModuleEstaReference(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAREFERENCE then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAREFERENCE), "ESTA Reference")
+	
+	subtree:add(OTPModuleEstaReference_SystemNumber, tvbuf(idx, SIZE_SYSTEM))
+	idx = idx + SIZE_SYSTEM
+
+	subtree:add(OTPModuleEstaReference_GroupNumber, tvbuf(idx, SIZE_GROUP))
+	idx = idx + SIZE_GROUP
+	
+	subtree:add(OTPModuleEstaReference_PointNumber, tvbuf(idx, SIZE_POINT))
+	idx = idx + SIZE_POINT		
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
