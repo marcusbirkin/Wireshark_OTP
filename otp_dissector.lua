@@ -139,6 +139,16 @@ OTPModuleESTAPosition_Z = {
 	[1] = ProtoField.int32("otp.transform.module.esta.position.z", "Z", base.UNIT_STRING, {" mm"}) -- "The Z location of the Point in mm"
 }
 
+local SIZE_ESTAVELOCITY = 4
+local SIZE_ESTAACCELERATION = 4
+local SIZE_OTPMODULEESTAVELOCITY = SIZE_ESTAVELOCITY + SIZE_ESTAVELOCITY + SIZE_ESTAVELOCITY + SIZE_ESTAACCELERATION + SIZE_ESTAACCELERATION + SIZE_ESTAACCELERATION
+OTPModuleESTAPositionVelocity_X = ProtoField.int32("otp.transform.module.esta.position.vx", "Vx", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the X direction of the Point in μm/s"
+OTPModuleESTAPositionVelocity_Y = ProtoField.int32("otp.transform.module.esta.position.vy", "Vy", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the Y direction of the Point in μm/s"
+OTPModuleESTAPositionVelocity_Z = ProtoField.int32("otp.transform.module.esta.position.vz", "Vz", base.UNIT_STRING, {" μm/s"}) -- "The linear velocity in the Z direction of the Point in μm/s"
+OTPModuleESTAPositionAcceleration_X = ProtoField.int32("otp.transform.module.esta.position.ax", "Ax", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+OTPModuleESTAPositionAcceleration_Y = ProtoField.int32("otp.transform.module.esta.position.ay", "Ay", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+OTPModuleESTAPositionAcceleration_Z = ProtoField.int32("otp.transform.module.esta.position.az", "Az", base.UNIT_STRING, {" μm/s/s"}) -- "The linear acceleration in the X direction of the Point in μm/s2"
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -210,7 +220,15 @@ otp.fields = {
 	OTPModuleESTAPosition_Scaling,
 	OTPModuleESTAPosition_X[0],OTPModuleESTAPosition_X[1],
 	OTPModuleESTAPosition_Y[0],OTPModuleESTAPosition_Y[1],
-	OTPModuleESTAPosition_Z[0],OTPModuleESTAPosition_Z[1]
+	OTPModuleESTAPosition_Z[0],OTPModuleESTAPosition_Z[1],
+	
+	-- Module ESTA Position Velocity/Acceleration
+	OTPModuleESTAPositionVelocity_X,
+	OTPModuleESTAPositionVelocity_Y,
+	OTPModuleESTAPositionVelocity_Z,
+	OTPModuleESTAPositionAcceleration_X,
+	OTPModuleESTAPositionAcceleration_Y,
+	OTPModuleESTAPositionAcceleration_Z
 }
 
 -- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
@@ -402,7 +420,7 @@ function Module(tvbuf, start, tree)
 		if OTP_MODULENUMBERS[modulenum:uint()] == "Position" then
 			ModuleEstaPosition(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Position Velocity/Acceleration" then
-		
+			ModuleEstaPositionVelocityAcceleration(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation" then
 		
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation Velocity/Acceleration" then
@@ -435,6 +453,30 @@ function ModuleEstaPosition(tvbuf, start, tree)
 	
 	subtree:add(OTPModuleESTAPosition_Z[scale], tvbuf(idx, SIZE_ESTAPOSITION))
 	idx = idx + SIZE_ESTAPOSITION
+end
+
+function ModuleEstaPositionVelocityAcceleration(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAVELOCITY then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAVELOCITY), "ESTA Velocity/Acceleration")
+
+	subtree:add(OTPModuleESTAPositionVelocity_X, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionVelocity_Y, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionVelocity_Z, tvbuf(idx, SIZE_ESTAVELOCITY))
+	idx = idx + SIZE_ESTAVELOCITY
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_X, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_Y, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
+	
+	subtree:add(OTPModuleESTAPositionAcceleration_Z, tvbuf(idx, SIZE_ESTAACCELERATION))
+	idx = idx + SIZE_ESTAACCELERATION
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
