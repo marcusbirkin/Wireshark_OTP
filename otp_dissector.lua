@@ -155,6 +155,16 @@ OTPModuleESTARotation_X = ProtoField.uint32("otp.transform.module.esta.rotaion.x
 OTPModuleESTARotation_Y = ProtoField.uint32("otp.transform.module.esta.rotaion.y", "Ry", base.UNIT_STRING, {" x10^(−6)°"}) -- "The Euler Y rotation of the Point in millionths of a decimal degree"
 OTPModuleESTARotation_Z = ProtoField.uint32("otp.transform.module.esta.rotaion.z", "Rz", base.UNIT_STRING, {" x10^(−6)°"}) -- "The Euler Z rotation of the Point in millionths of a decimal degree"
 
+local SIZE_ESTAROTATIONVELOCITY = 4
+local SIZE_ESTAROTATIONACCELERATION = 4
+local SIZE_OTPMODULEESTAROTATIONVELOCITY = SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONVELOCITY + SIZE_ESTAROTATIONACCELERATION + SIZE_ESTAROTATIONACCELERATION + SIZE_ESTAROTATIONACCELERATION
+OTPModuleESTARotationVelocity_X = ProtoField.int32("otp.transform.module.esta.rotation.vrx", "Vrx", base.UNIT_STRING, {" x10^(−3)°/s"}) -- "The velocity of Euler X rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationVelocity_Y = ProtoField.int32("otp.transform.module.esta.rotation.vry", "Vry", base.UNIT_STRING, {" x10^(−3)°/s"}) -- "The velocity of Euler Y rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationnVelocity_Z = ProtoField.int32("otp.transform.module.esta.rotation.vrz", "Vrz", base.UNIT_STRING, {" x10^(−3)/s"}) -- "The velocity of Euler Z rotation of the Point in thousandths of a decimal degree/s"
+OTPModuleESTARotationAcceleration_X = ProtoField.int32("otp.transform.module.esta.rotation.arx", "Arx", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler X rotation of the Point in thousandths of a decimal degree/s2"
+OTPModuleESTARotationAcceleration_Y = ProtoField.int32("otp.transform.module.esta.rotation.ary", "Ary", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Y rotation of the Point in thousandths of a decimal degree/s2"
+OTPModuleESTARotationAcceleration_Z = ProtoField.int32("otp.transform.module.esta.rotation.arz", "Arz", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Z rotation of the Point in thousandths of a decimal degree/s2"
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -239,7 +249,15 @@ otp.fields = {
 	-- Module ESTA Rotation Module
 	OTPModuleESTARotation_X,
 	OTPModuleESTARotation_Y,
-	OTPModuleESTARotation_Z
+	OTPModuleESTARotation_Z,
+	
+	-- Module ESTA Rotation Velocity/Acceleration 
+	OTPModuleESTARotationVelocity_X,
+	OTPModuleESTARotationVelocity_Y,
+	OTPModuleESTARotationnVelocity_Z,
+	OTPModuleESTARotationAcceleration_X,
+	OTPModuleESTARotationAcceleration_Y,
+	OTPModuleESTARotationAcceleration_Z
 }
 
 -- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
@@ -435,7 +453,7 @@ function Module(tvbuf, start, tree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation" then
 			ModuleEstaRotation(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation Velocity/Acceleration" then
-		
+			ModuleEstaRotationVelocityAcceleration(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Scale" then
 		
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Reference Frame" then
@@ -503,6 +521,30 @@ function ModuleEstaRotation(tvbuf, start, tree)
 	
 	subtree:add(OTPModuleESTARotation_Z, tvbuf(idx, SIZE_ESTAROTATION))
 	idx = idx + SIZE_ESTAPOSITION	
+end
+
+function ModuleEstaRotationVelocityAcceleration(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPMODULEESTAROTATIONVELOCITY then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPMODULEESTAROTATIONVELOCITY), "ESTA Rotation Velocity/Acceleration")
+
+	subtree:add(OTPModuleESTARotationVelocity_X, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationVelocity_Y, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationnVelocity_Z, tvbuf(idx, SIZE_ESTAROTATIONVELOCITY))
+	idx = idx + SIZE_ESTAROTATIONVELOCITY
+	
+	subtree:add(OTPModuleESTARotationAcceleration_X, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
+	
+	subtree:add(OTPModuleESTARotationAcceleration_Y, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
+	
+	subtree:add(OTPModuleESTARotationAcceleration_Z, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
+	idx = idx + SIZE_ESTAROTATIONACCELERATION
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
