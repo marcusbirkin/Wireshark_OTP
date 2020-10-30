@@ -165,6 +165,12 @@ OTPModuleESTARotationAcceleration_X = ProtoField.int32("otp.transform.module.est
 OTPModuleESTARotationAcceleration_Y = ProtoField.int32("otp.transform.module.esta.rotation.ary", "Ary", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Y rotation of the Point in thousandths of a decimal degree/s2"
 OTPModuleESTARotationAcceleration_Z = ProtoField.int32("otp.transform.module.esta.rotation.arz", "Arz", base.UNIT_STRING, {" x10^(−3)°/s/s"}) -- "The acceleration of Euler Z rotation of the Point in thousandths of a decimal degree/s2"
 
+local SIZE_ESTASCALE = 4
+local SIZE_OPTMODULEESTASCALE = SIZE_ESTASCALE + SIZE_ESTASCALE + SIZE_ESTASCALE
+OTPModuleESTAScale_X = ProtoField.int32("otp.transform.module.esta.scale.x", "X", base.DEC) -- "The scale of the Point in the X direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+OTPModuleESTAScale_Y = ProtoField.int32("otp.transform.module.esta.scale.y", "Y", base.DEC) -- "The scale of the Point in the Y direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+OTPModuleESTAScale_Z = ProtoField.int32("otp.transform.module.esta.scale.z", "Z", base.DEC) -- "The scale of the Point in the X direction in unitless millionths. A value of 1 (encoded as 1,000,000) indicates that this point is at its reference size"
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -257,7 +263,12 @@ otp.fields = {
 	OTPModuleESTARotationnVelocity_Z,
 	OTPModuleESTARotationAcceleration_X,
 	OTPModuleESTARotationAcceleration_Y,
-	OTPModuleESTARotationAcceleration_Z
+	OTPModuleESTARotationAcceleration_Z,
+	
+	-- Module ESTA Scale
+	OTPModuleESTAScale_X,
+	OTPModuleESTAScale_Y,
+	OTPModuleESTAScale_Z
 }
 
 -- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
@@ -455,7 +466,7 @@ function Module(tvbuf, start, tree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Rotation Velocity/Acceleration" then
 			ModuleEstaRotationVelocityAcceleration(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Scale" then
-		
+			ModuleEstaScale(tvbuf, idx, subtree)
 		elseif OTP_MODULENUMBERS[modulenum:uint()] == "Reference Frame" then
 
 		end
@@ -545,6 +556,21 @@ function ModuleEstaRotationVelocityAcceleration(tvbuf, start, tree)
 	
 	subtree:add(OTPModuleESTARotationAcceleration_Z, tvbuf(idx, SIZE_ESTAROTATIONACCELERATION))
 	idx = idx + SIZE_ESTAROTATIONACCELERATION
+end
+
+function ModuleEstaScale(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OPTMODULEESTASCALE then return end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OPTMODULEESTASCALE), "ESTA Scale")
+	
+	subtree:add(OTPModuleESTAScale_X, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE
+
+	subtree:add(OTPModuleESTAScale_Y, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE
+	
+	subtree:add(OTPModuleESTAScale_Z, tvbuf(idx, SIZE_ESTASCALE))
+	idx = idx + SIZE_ESTASCALE	
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
