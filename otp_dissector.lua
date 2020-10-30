@@ -16,6 +16,7 @@ local SIZE_SYSTEM = 1
 local SIZE_GROUP = 2
 local SIZE_POINT = 4
 local SIZE_TIMESTAMP = 8
+local SIZE_PRIORITY = 1
 
 local SIZE_OTPLAYER = OTP_IDENT:len() + SIZE_VECTOR + SIZE_LENGTH + SIZE_FOOTER_OPTIONS + SIZE_FOOTER_LENGTH + SIZE_CID + SIZE_FOLIO + SIZE_PAGE + SIZE_PAGE + SIZE_OPTIONS + SIZE_RESERVED + SIZE_NAME
 OTPLayer_Ident = ProtoField.string("otp.ident", "OTP Packet Identifier", base.ASCII, "Identifies this message as OTP")
@@ -101,6 +102,19 @@ OTPTransformLayer_Timestamp = ProtoField.relative_time("otp.transform.timestamp"
 OTPTransformLayer_Pointset = ProtoField.uint8("otp.transform.pointset", "Full Point Set",  base.DEC, {[0] = "Subset", [1] = "Full set"}, 0x80, "Options Flags")
 OTPTransformLayer_Reserved = ProtoField.uint32("otp.transform.reserved", "Reserved", base.HEX) -- "Reserved"
 
+local SIZE_OTPPOINT = SIZE_VECTOR + SIZE_LENGTH + SIZE_PRIORITY + SIZE_GROUP + SIZE_POINT + SIZE_TIMESTAMP + SIZE_OPTIONS + SIZE_RESERVED
+local OTPPointLayer_Vectors = {
+	[0x0001] = "VECTOR_OTP_MODULE"
+}
+OTPPointLayer_Vector = ProtoField.uint16("otp.transform.point.vector", "Vector", base.HEX, OTPPointLayer_Vectors, 0, "Identifies Point data as OTP Module PDU")
+OTPPointLayer_Length = ProtoField.uint16("otp.transform.point.length", "Length", base.DEC) -- "Length of PDU"
+OTPPointLayer_Priority = ProtoField.uint8("otp.transform.point.priority", "Priority", base.DEC) -- "Data priority if multiple sources for this Address"
+OTPPointLayer_GroupNumber = ProtoField.uint16("otp.transform.point.group", "Group Number", base.DEC)
+OTPPointLayer_PointNumber = ProtoField.uint32("otp.transform.point.point", "Point Number", base.DEC)
+OTPPointLayer_Timestamp = ProtoField.relative_time("otp.transform.point.timestamp", "Timestamp", "Microseconds since the Time Origin")
+OTPPointLayer_Options = ProtoField.uint8("otp.transform.point.options", "Options", base.HEX) -- "Options Flags"
+OTPPointLayer_Reserved = ProtoField.uint32("otp.transform.point.reserved", "Reserved", base.HEX) -- "Reserved"
+
 otp.fields = { 
 	-- OTP Layer
 	OTPLayer_Ident, 
@@ -151,7 +165,17 @@ otp.fields = {
 	OTPTransformLayer_SystemNumber,
 	OTPTransformLayer_Timestamp,
 	OTPTransformLayer_Pointset,
-	OTPTransformLayer_Reserved
+	OTPTransformLayer_Reserved,
+	
+	-- Point Layer
+	OTPPointLayer_Vector,
+	OTPPointLayer_Length,
+	OTPPointLayer_Priority,
+	OTPPointLayer_GroupNumber,
+	OTPPointLayer_PointNumber,
+	OTPPointLayer_Timestamp,
+	OTPPointLayer_Options,
+	OTPPointLayer_Reserved
 }
 
 function heuristic_checker(tvbuf, pktinfo, root)
@@ -234,11 +258,10 @@ function TransformMessage(tvbuf, start, tree)
 	if tvbuf:len() < start + SIZE_OTPTRANSFORM then return false end
 	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPTRANSFORM), "Transform Layer")
 	
-	
 	local vector = tvbuf(idx, SIZE_VECTOR)
 	idx = idx + SIZE_VECTOR
 	subtree:add(OTPTransformLayer_Vector, vector)
-	
+
 	local length = tvbuf(idx, SIZE_LENGTH)
 	idx = idx + SIZE_LENGTH
 	local lengthItem = subtree:add(OTPTransformLayer_Length, length)
@@ -261,7 +284,55 @@ function TransformMessage(tvbuf, start, tree)
 	subtree:add(OTPTransformLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
 	idx = idx + SIZE_RESERVED
 	
+	if OTPTransformLayer_Vectors[vector:uint()] == "VECTOR_OTP_POINT" then
+		 Point(tvbuf, idx, tree)
+	else
+		return
+	end
+end
+
+function Point(tvbuf, start, tree)
+	local idx = start
+	if tvbuf:len() < start + SIZE_OTPPOINT then return false end
+	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPPOINT), "Point Layer")
 	
+	local vector = tvbuf(idx, SIZE_VECTOR)
+	idx = idx + SIZE_VECTOR
+	subtree:add(OTPPointLayer_Vector, vector)
+	
+	local length = tvbuf(idx, SIZE_LENGTH)
+	idx = idx + SIZE_LENGTH
+	local lengthItem = subtree:add(OTPPointLayer_Length, length)
+	local lengthOffset = tvbuf:len() - start - (length:uint() + (SIZE_VECTOR + SIZE_LENGTH))
+	if lengthOffset > 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too long")
+	elseif lengthOffset < 0 then
+		lengthItem:add_expert_info(PI_MALFORMED, PI_ERROR, "PDU too short")
+	end
+	
+	subtree:add(OTPPointLayer_Priority, tvbuf(idx, SIZE_PRIORITY))
+	idx = idx + SIZE_PRIORITY
+	
+	subtree:add(OTPPointLayer_GroupNumber, tvbuf(idx, SIZE_GROUP))
+	idx = idx + SIZE_GROUP
+	
+	subtree:add(OTPPointLayer_PointNumber, tvbuf(idx, SIZE_POINT))
+	idx = idx + SIZE_POINT
+	
+	subtree:add(OTPPointLayer_Timestamp, tvbuf(idx, SIZE_TIMESTAMP))
+	idx = idx + SIZE_TIMESTAMP
+	
+	subtree:add(OTPPointLayer_Options, tvbuf(idx, SIZE_OPTIONS))
+	idx = idx + SIZE_OPTIONS
+	
+	subtree:add(OTPPointLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
+	idx = idx + SIZE_RESERVED
+	
+	if OTPPointLayer_Vectors[vector:uint()] == "VECTOR_OTP_MODULE" then
+		 Module(tvbuf, idx, tree)
+	else
+		return
+	end
 end
 
 function AdvertisementMessage(tvbuf, start, tree)
