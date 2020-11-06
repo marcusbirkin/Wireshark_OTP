@@ -284,6 +284,11 @@ otp.fields = {
 -- Bitwise helper functions from https://gist.github.com/kaeza/8ee7e921c98951b4686d
 local bitty = require "bitty"
 
+function formatCID(tvrange) 
+	if tvrange:len() ~= SIZE_CID then return "Invalid CID" end
+	return tvrange:range(0,4).."-"..tvrange:range(4,2).."-"..tvrange:range(6,2).."-"..tvrange:range(8,2).."-"..tvrange:range(10,6)
+end
+
 function heuristic_checker(tvbuf, pktinfo, root)
 	-- Check ident
 	if tvbuf:len() < OTP_IDENT:len() then return false end
@@ -329,7 +334,8 @@ function otp.dissector(tvbuf, pktinfo, root)
 	footer:add(OTPLayer_FooterLength, tvbuf(idx, SIZE_FOOTER_LENGTH))
 	idx = idx + SIZE_FOOTER_LENGTH
 	
-	subtree:add(OTPLayer_CID, tvbuf(idx, SIZE_CID))
+	local cid = tvbuf(idx, SIZE_CID)
+	subtree:add(OTPLayer_CID, cid)
 	idx = idx + SIZE_CID
 	
 	subtree:add(OTPLayer_Folio, tvbuf(idx, SIZE_FOLIO))
@@ -347,19 +353,23 @@ function otp.dissector(tvbuf, pktinfo, root)
 	subtree:add(OTPLayer_Reserved, tvbuf(idx, SIZE_RESERVED))
 	idx = idx + SIZE_RESERVED
 	
+	local name = tvbuf(idx, SIZE_NAME)
 	subtree:add(OTPLayer_Name, tvbuf(idx, SIZE_NAME))
 	idx = idx + SIZE_NAME
 	
+	local info = {}
 	if OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_TRANSFORM_MESSAGE" then
-		TransformMessage(tvbuf, idx, tree)
+		TransformMessage(tvbuf, idx, tree, info)
 	elseif OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MESSAGE" then
-		AdvertisementMessage(tvbuf, idx, tree)
+		AdvertisementMessage(tvbuf, idx, tree, info)
 	else
 		return
 	end
+
+	pktinfo.cols.info = info.strVector..", "..name:string().." ("..formatCID(cid)..")"
 end
 
-function TransformMessage(tvbuf, start, tree)
+function TransformMessage(tvbuf, start, tree, info)
 	local idx = start
 	if tvbuf:len() < start + SIZE_OTPTRANSFORM then return false end
 	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPTRANSFORM), "Transform Layer")
@@ -391,12 +401,16 @@ function TransformMessage(tvbuf, start, tree)
 	idx = idx + SIZE_RESERVED
 	
 	if OTPTransformLayer_Vectors[vector:uint()] == "VECTOR_OTP_POINT" then
+		info.strVector = "Point Transform"
 		-- Point PDUs
 		while (idx < start + length:uint() ) do
 			local res = Point(tvbuf, idx, subtree)
 			if (res == 0) then break end --TODO Hightlight this has an error state
 			idx = idx + res
 		end
+	else
+		info.strVector = "Unknown Transform"
+		return
 	end
 end
 
@@ -598,7 +612,7 @@ function ModuleEstaReference(tvbuf, start, tree)
 	idx = idx + SIZE_POINT		
 end
 
-function AdvertisementMessage(tvbuf, start, tree)
+function AdvertisementMessage(tvbuf, start, tree, info)
 	local idx = start
 	if tvbuf:len() < start + SIZE_OTPADVERTISMENT then return false end
 	local subtree = tree:add(otp, tvbuf(start, SIZE_OTPADVERTISMENT), "Advertisement Layer")
@@ -621,12 +635,16 @@ function AdvertisementMessage(tvbuf, start, tree)
 	idx = idx + SIZE_RESERVED
 	
 	if OTPAdvertisementLayer_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MODULE" then
-		 AdvertisementModule(tvbuf, idx, tree)
+		info.strVector = "Module Advertisement"
+		AdvertisementModule(tvbuf, idx, tree)
 	elseif OTPAdvertisementLayer_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_NAME" then
+		info.strVector = "Name Advertisement"
 		AdvertisementName(tvbuf, idx, tree)
 	elseif OTPAdvertisementLayer_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_SYSTEM" then
+		info.strVector = "System Advertisement"
 		AdvertisementSystem(tvbuf, idx, tree)
 	else
+		info.strVector = "Unknown Advertisement"
 		return
 	end
 end
