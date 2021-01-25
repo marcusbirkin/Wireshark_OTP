@@ -366,7 +366,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 		return
 	end
 
-	pktinfo.cols.info = info.strVector..", "..name:string().." ("..formatCID(cid)..")"
+	pktinfo.cols.info = info.strVector..", "..string.gsub(name:string(), "\0*$", "").." ("..formatCID(cid)..")"
 end
 
 function TransformMessage(tvbuf, start, tree, info)
