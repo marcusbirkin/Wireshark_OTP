@@ -318,7 +318,11 @@ function otp.dissector(tvbuf, pktinfo, root)
 	
 	local vector = tvbuf(idx, SIZE_VECTOR)
 	idx = idx + SIZE_VECTOR
-	subtree:add(OTPLayer_Vector, vector)
+	local vectorItem = subtree:add(OTPLayer_Vector, vector)
+	if OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_TRANSFORM_MESSAGE_DRAFT" 
+		or OTPLater_Vectors[vector:uint()] == "VECTOR_OTP_ADVERTISEMENT_MESSAGE_DRAFT" then
+			vectorItem:add_expert_info(PI_PROTOCOL, PI_ERROR, "Draft Vector")
+	end
 	
 	local length = tvbuf(idx, SIZE_LENGTH)
 	idx = idx + SIZE_LENGTH
