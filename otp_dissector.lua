@@ -36,8 +36,10 @@ local OTP_MODULENUMBERS = {
 local SIZE_OTPLAYER = OTP_IDENT:len() + SIZE_VECTOR + SIZE_LENGTH + SIZE_FOOTER_OPTIONS + SIZE_FOOTER_LENGTH + SIZE_CID + SIZE_FOLIO + SIZE_PAGE + SIZE_PAGE + SIZE_OPTIONS + SIZE_RESERVED + SIZE_NAME
 OTPLayer_Ident = ProtoField.string("otp.ident", "OTP Packet Identifier", base.ASCII, "Identifies this message as OTP")
 local OTPLater_Vectors = {
-	[0xFF01] = "VECTOR_OTP_TRANSFORM_MESSAGE",
-	[0xFF02] = "VECTOR_OTP_ADVERTISEMENT_MESSAGE"
+	[0x0001] = "VECTOR_OTP_TRANSFORM_MESSAGE",
+	[0x0002] = "VECTOR_OTP_ADVERTISEMENT_MESSAGE",
+	[0xFF01] = "VECTOR_OTP_TRANSFORM_MESSAGE_DRAFT",
+	[0xFF02] = "VECTOR_OTP_ADVERTISEMENT_MESSAGE_DRAFT"
 }
 OTPLayer_Vector = ProtoField.uint16("otp.vector", "Vector", base.HEX, OTPLater_Vectors, 0, "Identifies OTP Layer data as OTP Transform PDU")
 OTPLayer_Length = ProtoField.uint16("otp.length", "Length", base.DEC) -- "Length of message"
