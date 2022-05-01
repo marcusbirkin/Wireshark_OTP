@@ -360,7 +360,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 	idx = idx + SIZE_RESERVED
 	
 	local name = tvbuf(idx, SIZE_NAME)
-	subtree:add(OTPLayer_Name, tvbuf(idx, SIZE_NAME))
+	subtree:add_packet_field(OTPLayer_Name, tvbuf(idx, SIZE_NAME), ENC_UTF_8 + ENC_STRING)
 	idx = idx + SIZE_NAME
 	
 	local info = {}
@@ -372,7 +372,7 @@ function otp.dissector(tvbuf, pktinfo, root)
 		return
 	end
 
-	pktinfo.cols.info = info.strVector..", "..string.gsub(name:string(), "\0*$", "").." ("..formatCID(cid)..")"
+	pktinfo.cols.info = info.strVector..", "..string.gsub(name:string(ENC_UTF_8), "\0*$", "").." ("..formatCID(cid)..")"
 end
 
 function TransformMessage(tvbuf, start, tree, info)
